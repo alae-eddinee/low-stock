@@ -1,0 +1,4 @@
+stock.xlsx
+__pycache__/
+*.pyc
+.env
