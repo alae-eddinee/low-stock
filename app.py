@@ -1,28 +1,48 @@
 import streamlit as st
-import pandas as pd
 import openpyxl
 from openpyxl.styles import PatternFill, Font
-from copy import copy
 from io import BytesIO
 
 LIST_FILE = "list/ARTICLE PERMANENT GMS CADRE MIROIR MEUBLE.xlsx"
 LOW_STOCK_THRESHOLD = 100
 
-RED_FILL   = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
-RED_FONT   = Font(name="Calibri", size=11, color="FFFFFF")
+RED_FILL = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+RED_FONT = Font(name="Calibri", size=11, color="FFFFFF")
 
 
-def build_excel(list_wb, stock_lookup: dict) -> BytesIO:
-    """Clone the list workbook, update Qte site6, color low-stock cells."""
-    ws = list_wb.active
+def load_stock_lookup(file) -> dict:
+    """Read stock file, return {code: qty} mapping."""
+    wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+    ws = wb.active
+    headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    code_col = next((i for i, h in enumerate(headers) if h and str(h).strip() == "Code"), None)
+    qte_col  = next((i for i, h in enumerate(headers) if h and str(h).strip() == "Qte site6"), None)
+    if code_col is None or qte_col is None:
+        raise ValueError("Stock file must have 'Code' and 'Qte site6' columns.")
+    lookup = {}
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        code = row[code_col]
+        qty  = row[qte_col]
+        if code is not None:
+            lookup[str(code).strip()] = qty
+    wb.close()
+    return lookup
 
-    # find the Qte site6 column index and Code column index from header row
-    header = {cell.value: cell.column for cell in ws[1]}
-    qte_col  = header.get("Qte site6")
-    code_col = header.get("Code")
+
+def build_excel(list_path: str, stock_lookup: dict) -> tuple[BytesIO, int, int]:
+    """Clone list workbook, update Qte site6, colour low-stock cells."""
+    wb = openpyxl.load_workbook(list_path)
+    ws = wb.active
+
+    headers  = {cell.value: cell.column for cell in ws[1]}
+    qte_col  = headers.get("Qte site6")
+    code_col = headers.get("Code")
 
     if not qte_col or not code_col:
-        raise ValueError("Could not find 'Code' or 'Qte site6' columns in list file.")
+        raise ValueError("List file must have 'Code' and 'Qte site6' columns.")
+
+    total     = ws.max_row - 1
+    low_count = 0
 
     for row in ws.iter_rows(min_row=2):
         code_cell = row[code_col - 1]
@@ -36,45 +56,42 @@ def build_excel(list_wb, stock_lookup: dict) -> BytesIO:
         if isinstance(qty, (int, float)) and qty < LOW_STOCK_THRESHOLD:
             qte_cell.fill = RED_FILL
             qte_cell.font = RED_FONT
+            low_count += 1
 
     buf = BytesIO()
-    list_wb.save(buf)
+    wb.save(buf)
     buf.seek(0)
-    return buf
+    return buf, total, low_count
 
 
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="Low Stock Checker", layout="centered")
 st.title("Low Stock Checker")
-st.markdown("Upload the **stock file** — the app updates the article list with fresh quantities and highlights stock below **100** in red.")
+st.markdown(
+    "Upload the **stock file** — the app updates the article list with fresh "
+    "quantities and highlights stock below **100** in red."
+)
 
 uploaded = st.file_uploader("Upload stock.xlsx", type=["xlsx"])
 
 if uploaded:
-    # build stock lookup: Code -> Qte site6
-    stock_df = pd.read_excel(uploaded, sheet_name=0, dtype={"Code": str})
-    stock_df.columns = stock_df.columns.str.strip()
-    stock_df["Code"] = stock_df["Code"].astype(str).str.strip()
-    stock_lookup = dict(zip(stock_df["Code"], stock_df["Qte site6"]))
-
-    # open the list workbook (preserves all formatting/structure)
     try:
-        list_wb = openpyxl.load_workbook(LIST_FILE)
-    except FileNotFoundError:
-        st.error(f"Could not find the article list at: `{LIST_FILE}`")
+        stock_lookup = load_stock_lookup(uploaded)
+    except ValueError as e:
+        st.error(str(e))
         st.stop()
 
-    excel_buf = build_excel(list_wb, stock_lookup)
-
-    # quick stats for display
-    ws = list_wb.active
-    header = {cell.value: cell.column for cell in ws[1]}
-    qte_col = header.get("Qte site6")
-    quantities = [ws.cell(r, qte_col).value for r in range(2, ws.max_row + 1)]
-    low_count = sum(1 for q in quantities if isinstance(q, (int, float)) and q < LOW_STOCK_THRESHOLD)
+    try:
+        excel_buf, total, low_count = build_excel(LIST_FILE, stock_lookup)
+    except FileNotFoundError:
+        st.error(f"Article list not found at: `{LIST_FILE}`")
+        st.stop()
+    except ValueError as e:
+        st.error(str(e))
+        st.stop()
 
     c1, c2 = st.columns(2)
-    c1.metric("Articles in list", ws.max_row - 1)
+    c1.metric("Articles in list", total)
     c2.metric(f"Low stock (< {LOW_STOCK_THRESHOLD})", low_count)
 
     st.download_button(
