@@ -96,7 +96,7 @@ def build_stock_excel(list_path: str, stock_lookup: dict) -> tuple[BytesIO, int,
 def load_labo_orders(file) -> dict:
     """
     Read labo Excel (file-like or path).
-    Returns {ndoc: {labo, date, items: [(designation, qty, prix_ttc, montant_ttc)]}}
+    Returns {ndoc: {labo, date, items: [(code, designation, qty, prix_ttc, montant_ttc)]}}
     """
     wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
     ws = wb.active
@@ -105,6 +105,7 @@ def load_labo_orders(file) -> dict:
         ndoc        = row[3]
         tiers       = row[5]
         date        = row[1]
+        code        = row[8]
         designation = row[9]
         qty         = _to_num(row[11])
         prix_ttc    = _to_num(row[17])
@@ -113,7 +114,7 @@ def load_labo_orders(file) -> dict:
             continue
         if ndoc not in orders:
             orders[ndoc] = {"labo": tiers or "", "date": date, "items": []}
-        orders[ndoc]["items"].append((designation or "", qty, prix_ttc, montant_ttc))
+        orders[ndoc]["items"].append((str(code).strip() if code is not None else "", designation or "", qty, prix_ttc, montant_ttc))
     wb.close()
     return orders
 
@@ -139,10 +140,11 @@ def build_labo_excel(labo_file) -> BytesIO:
     ws = wb.active
     ws.title = "Analyse Labo"
 
-    ws.column_dimensions["A"].width = 48
-    ws.column_dimensions["B"].width = 10
-    ws.column_dimensions["C"].width = 20
-    ws.column_dimensions["D"].width = 16
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 48
+    ws.column_dimensions["C"].width = 10
+    ws.column_dimensions["D"].width = 20
+    ws.column_dimensions["E"].width = 16
 
     current_row = 1
 
@@ -156,7 +158,7 @@ def build_labo_excel(labo_file) -> BytesIO:
 
         # Row 1 — commande number + date (merged, dark blue)
         ws.merge_cells(start_row=current_row, start_column=1,
-                       end_row=current_row, end_column=4)
+                       end_row=current_row, end_column=5)
         _cell(ws, current_row, 1,
               f"Commande N° {ndoc}   |   {date_str}",
               font=WHITE_FONT, fill=BLUE_FILL, alignment=CENTER)
@@ -165,7 +167,7 @@ def build_labo_excel(labo_file) -> BytesIO:
 
         # Row 2 — labo name (merged, medium blue)
         ws.merge_cells(start_row=current_row, start_column=1,
-                       end_row=current_row, end_column=4)
+                       end_row=current_row, end_column=5)
         _cell(ws, current_row, 1, labo,
               font=WHITE_FONT, fill=LBLUE_FILL, alignment=CENTER)
         ws.row_dimensions[current_row].height = 20
@@ -173,7 +175,7 @@ def build_labo_excel(labo_file) -> BytesIO:
 
         # Row 3 — column headers
         for col_idx, label in enumerate(
-            ["Désignation", "Qté", "Prix Unitaire TTC", "Montant TTC"], start=1
+            ["Code Article", "Désignation", "Qté", "Prix Unitaire TTC", "Montant TTC"], start=1
         ):
             _cell(ws, current_row, col_idx, label,
                   font=HEADER_FONT, fill=LBLUE_FILL, alignment=CENTER, border=BORDER)
@@ -182,17 +184,19 @@ def build_labo_excel(labo_file) -> BytesIO:
 
         # Data rows
         total_qty = total_montant = 0
-        for i, (designation, qty, prix_ttc, montant_ttc) in enumerate(items):
+        for i, (code, designation, qty, prix_ttc, montant_ttc) in enumerate(items):
             row_fill = GRAY_FILL if i % 2 == 0 else None
-            _cell(ws, current_row, 1, designation,
+            _cell(ws, current_row, 1, code,
+                  font=BODY_FONT, fill=row_fill, alignment=CENTER, border=BORDER)
+            _cell(ws, current_row, 2, designation,
                   font=BODY_FONT, fill=row_fill, alignment=LEFT,  border=BORDER)
-            _cell(ws, current_row, 2, qty,
+            _cell(ws, current_row, 3, qty,
                   font=BODY_FONT, fill=row_fill, alignment=CENTER, border=BORDER,
                   number_format="#,##0")
-            _cell(ws, current_row, 3, prix_ttc,
+            _cell(ws, current_row, 4, prix_ttc,
                   font=BODY_FONT, fill=row_fill, alignment=RIGHT, border=BORDER,
                   number_format="#,##0.00")
-            _cell(ws, current_row, 4, montant_ttc,
+            _cell(ws, current_row, 5, montant_ttc,
                   font=BODY_FONT, fill=row_fill, alignment=RIGHT, border=BORDER,
                   number_format="#,##0.00")
             total_qty     += qty or 0
@@ -200,14 +204,18 @@ def build_labo_excel(labo_file) -> BytesIO:
             current_row   += 1
 
         # Total row
+        ws.merge_cells(start_row=current_row, start_column=1,
+                       end_row=current_row, end_column=2)
         _cell(ws, current_row, 1, "TOTAL",
               font=TOTAL_FONT, fill=TOTAL_FILL, alignment=CENTER, border=BORDER)
-        _cell(ws, current_row, 2, int(total_qty),
+        _cell(ws, current_row, 2, None,
+              font=TOTAL_FONT, fill=TOTAL_FILL, border=BORDER)
+        _cell(ws, current_row, 3, int(total_qty),
               font=TOTAL_FONT, fill=TOTAL_FILL, alignment=CENTER, border=BORDER,
               number_format="#,##0")
-        _cell(ws, current_row, 3, None,
+        _cell(ws, current_row, 4, None,
               font=TOTAL_FONT, fill=TOTAL_FILL, border=BORDER)
-        _cell(ws, current_row, 4, total_montant,
+        _cell(ws, current_row, 5, total_montant,
               font=TOTAL_FONT, fill=TOTAL_FILL, alignment=RIGHT, border=BORDER,
               number_format="#,##0.00")
         ws.row_dimensions[current_row].height = 18
