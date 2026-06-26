@@ -10,17 +10,19 @@ LOW_STOCK_THRESHOLD = 100
 RED_FILL   = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 RED_FONT   = Font(name="Calibri", size=11, color="FFFFFF")
 
-BLUE_FILL  = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
-LBLUE_FILL = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
-GRAY_FILL  = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
-TOTAL_FILL = PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid")
+BLUE_FILL  = PatternFill(start_color="DBFFC2", end_color="DBFFC2", fill_type="solid")  # commande header
+LBLUE_FILL = PatternFill(start_color="C2FFC7", end_color="C2FFC7", fill_type="solid")  # labo name row
+COL_FILL   = PatternFill(start_color="C2FFE6", end_color="C2FFE6", fill_type="solid")  # column headers
+GRAY_FILL  = PatternFill(start_color="F0FFF4", end_color="F0FFF4", fill_type="solid")  # alternating rows (very light)
+TOTAL_FILL = PatternFill(start_color="C2FFC7", end_color="C2FFC7", fill_type="solid")  # total row
 
-WHITE_FONT  = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
-HEADER_FONT = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+DARK_FONT   = Font(name="Calibri", size=12, bold=True, color="1B4332")
+WHITE_FONT  = DARK_FONT  # alias — these pastels need dark text
+HEADER_FONT = Font(name="Calibri", size=11, bold=True, color="1B4332")
 BODY_FONT   = Font(name="Calibri", size=11)
-TOTAL_FONT  = Font(name="Calibri", size=11, bold=True)
+TOTAL_FONT  = Font(name="Calibri", size=11, bold=True, color="1B4332")
 
-THIN   = Side(style="thin", color="B8CCE4")
+THIN   = Side(style="thin", color="A8E6B8")
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
 LEFT   = Alignment(horizontal="left",   vertical="center", wrap_text=True)
@@ -178,7 +180,7 @@ def build_labo_excel(labo_file) -> BytesIO:
             ["Code Article", "Désignation", "Qté", "Prix Unitaire TTC", "Montant TTC"], start=1
         ):
             _cell(ws, current_row, col_idx, label,
-                  font=HEADER_FONT, fill=LBLUE_FILL, alignment=CENTER, border=BORDER)
+                  font=HEADER_FONT, fill=COL_FILL, alignment=CENTER, border=BORDER)
         ws.row_dimensions[current_row].height = 30
         current_row += 1
 
